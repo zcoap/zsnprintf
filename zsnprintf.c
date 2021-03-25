@@ -38,8 +38,6 @@
 #include "config.h"
 #include "zsnprintf.h"
 
-#ifdef USE_ZCOAP_SNPRINTF
-
 #define MAX_WIDTH_SUB_SPEC "0-+ #"MAX_DEC_FMT_I32"."MAX_DEC_FMT_I32"ll"
 #define DTOCHAR(_d) ((_d) + '0')
 #define XTOCHAR(_x) ((_x) >= 0xA ? (_x) - 0xA + 'A' : DTOCHAR(_x))
@@ -48,6 +46,60 @@
 #define DEFAULT_PRECISION 4
 #define MAX_DEC_FMT_I32 "-2147483648"
 #define MAX_DEC_FMT_I16 "-32767"
+
+#if UINT_MAX == UINT16_MAX
+#define zxtoa zx16toa
+#define zotoa zo16toa
+#define zitoa zi16toa
+#define zutoa zu16toa
+#elif UINT_MAX == UINT32_MAX
+#define zxtoa zx32toa
+#define zotoa zo32toa
+#define zitoa zi32toa
+#define zutoa zu32toa
+#elif UINT_MAX == UINT64_MAX
+#define zxtoa zx64toa
+#define zotoa zo64toa
+#define zitoa zi64toa
+#define zutoa zu64toa
+#else
+#error UINT_MAX unsupported
+#endif
+
+#if ULONG_MAX == UINT32_MAX
+#define zlxtoa zx32toa
+#define zltoa zi32toa
+#define zultoa zu32toa
+#elif ULONG_MAX == UINT64_MAX
+#define zlxtoa zx64toa
+#define zltoa zi64toa
+#define zultoa zu64toa
+#else
+#error ULONG_MAX unsupported
+#endif
+
+#define zllxtoa zx64toa
+#define zlltoa zi64toa
+#define zulltoa zu64toa
+
+#ifdef __GNUC__
+
+#if (__DBL_MANT_DIG__ == __FLT_MANT_DIG__)
+#define zftoa zftoaf // 32-bit doubles
+#else
+#define zftoa zftoal
+#endif
+
+#else
+
+#if defined(DBL_MANT_DIG) && defined(FLT_MANT_DIG) && (DBL_MANT_DIG == FLT_MANT_DIG)
+#define zftoa zftoaf // 32-bit doubles
+#else
+#define zftoa zftoal
+#endif
+
+#endif
+
 
 typedef enum sign_e {
     auto_sign,
@@ -69,24 +121,11 @@ typedef struct flags_s {
     unsigned exp : 2;
 } fmt_flags_t;
 
-#ifdef __GNUC__
-
-#if (__DBL_MANT_DIG__ != __FLT_MANT_DIG__)
-#define zftoa zftoal
-#else
-#define zftoa zftoaf
-#endif
-
-#else
-
-#if (DBL_MANT_DIG != FLT_MANT_DIG)
-#define zftoa zftoal
-#else
-#define zftoa zftoaf
-#endif
-
-#endif
-
+typedef enum int_width_e {
+    ZW16,
+    ZW32,
+    ZW64,
+} int_width_t;
 
 static char *zx16toa(char *buf, uint16_t n, unsigned width, fmt_flags_t flags)
 {
@@ -176,7 +215,7 @@ static char *zx32toa(char *buf, uint32_t n, unsigned width, fmt_flags_t flags)
     return buf;
 }
 
-static char *zx64toa(char *buf, uint64_t n, unsigned width, fmt_flags_t flags)
+static char *zx64toa(char *buf, int_size_t size, uint64_t n, unsigned width, fmt_flags_t flags)
 {
     uint8_t d15, d14, d13, d12, d11, d10, d9, d8, d7, d6, d5, d4, d3, d2, d1, d0;
     unsigned first_digit = 0;
@@ -185,18 +224,22 @@ static char *zx64toa(char *buf, uint64_t n, unsigned width, fmt_flags_t flags)
     d1 = (n >> 4) & 0xF; if (d1) { first_digit = 1; }
     d2 = (n >> 8) & 0xF; if (d2) { first_digit = 2; }
     d3 = (n >> 12) & 0xF; if (d3) { first_digit = 3; }
-    d4 = (n >> 16) & 0xF; if (d4) { first_digit = 4; }
-    d5 = (n >> 20) & 0xF; if (d5) { first_digit = 5; }
-    d6 = (n >> 24) & 0xF; if (d6) { first_digit = 6; }
-    d7 = (n >> 28) & 0xF; if (d7) { first_digit = 7; }
-    d8 = (n >> 32) & 0xF; if (d8) { first_digit = 8; }
-    d9 = (n >> 36) & 0xF; if (d9) { first_digit = 9; }
-    d10 = (n >> 40) & 0xF; if (d10) { first_digit = 10; }
-    d11 = (n >> 44) & 0xF; if (d11) { first_digit = 11; }
-    d12 = (n >> 48) & 0xF; if (d12) { first_digit = 12; }
-    d13 = (n >> 52) & 0xF; if (d13) { first_digit = 13; }
-    d14 = (n >> 56) & 0xF; if (d14) { first_digit = 14; }
-    d15 = (n >> 60) & 0xF; if (d15) { first_digit = 15; }
+    if (size >= ZS32) {
+        d4 = (n >> 16) & 0xF; if (d4) { first_digit = 4; }
+        d5 = (n >> 20) & 0xF; if (d5) { first_digit = 5; }
+        d6 = (n >> 24) & 0xF; if (d6) { first_digit = 6; }
+        d7 = (n >> 28) & 0xF; if (d7) { first_digit = 7; }
+    }
+    if (size >= ZS64) {
+        d8 = (n >> 32) & 0xF; if (d8) { first_digit = 8; }
+        d9 = (n >> 36) & 0xF; if (d9) { first_digit = 9; }
+        d10 = (n >> 40) & 0xF; if (d10) { first_digit = 10; }
+        d11 = (n >> 44) & 0xF; if (d11) { first_digit = 11; }
+        d12 = (n >> 48) & 0xF; if (d12) { first_digit = 12; }
+        d13 = (n >> 52) & 0xF; if (d13) { first_digit = 13; }
+        d14 = (n >> 56) & 0xF; if (d14) { first_digit = 14; }
+        d15 = (n >> 60) & 0xF; if (d15) { first_digit = 15; }
+    }
 
     if (width) {
         // width is 1-based; change to 0-based
@@ -219,6 +262,180 @@ static char *zx64toa(char *buf, uint64_t n, unsigned width, fmt_flags_t flags)
     }
 
     switch (first_digit) {
+        case 15: *buf = XTOCHAR(d15); ++buf;
+        case 14: *buf = XTOCHAR(d14); ++buf;
+        case 13: *buf = XTOCHAR(d13); ++buf;
+        case 12: *buf = XTOCHAR(d12); ++buf;
+        case 11: *buf = XTOCHAR(d11); ++buf;
+        case 10: *buf = XTOCHAR(d10); ++buf;
+        case 9: *buf = XTOCHAR(d9); ++buf;
+        case 8: *buf = XTOCHAR(d8); ++buf;
+        case 7: *buf = XTOCHAR(d7); ++buf;
+        case 6: *buf = XTOCHAR(d6); ++buf;
+        case 5: *buf = XTOCHAR(d5); ++buf;
+        case 4: *buf = XTOCHAR(d4); ++buf;
+        case 3: *buf = XTOCHAR(d3); ++buf;
+        case 2: *buf = XTOCHAR(d2); ++buf;
+        case 1: *buf = XTOCHAR(d1); ++buf;
+    }
+    *buf = XTOCHAR(d0); ++buf;
+    *buf = '\0';
+    return buf;
+}
+
+static char *zo16toa(char *buf, uint16_t n, unsigned width, fmt_flags_t flags)
+{
+    uint8_t d5, d4, d3, d2, d1, d0;
+    unsigned first_digit = 0;
+
+    d0 = n & 0x7;
+    d1 = (n >> 3) & 0x7; if (d1) { first_digit = 1; }
+    d2 = (n >> 6) & 0x7; if (d2) { first_digit = 2; }
+    d3 = (n >> 9) & 0x7; if (d3) { first_digit = 3; }
+    d4 = (n >> 12) & 0x7; if (d4) { first_digit = 4; }
+    d5 = (n >> 15) & 0x7; if (d5) { first_digit = 5; }
+
+    if (width) {
+        // width is 1-based; change to 0-based
+        if (width > 5) {
+            width = 5;
+        } else {
+            --width;
+        }
+        if (flags.zeropad) {
+            for (unsigned i = width; i > first_digit; --i) {
+                *buf = '0';
+                ++buf;
+            }
+        } else {
+            for (unsigned i = width; i > first_digit; --i) {
+                *buf = ' ';
+                ++buf;
+            }
+        }
+    }
+
+    switch (first_digit) {
+        case 5: *buf = XTOCHAR(d5); ++buf;
+        case 4: *buf = XTOCHAR(d4); ++buf;
+        case 3: *buf = XTOCHAR(d3); ++buf;
+        case 2: *buf = XTOCHAR(d2); ++buf;
+        case 1: *buf = XTOCHAR(d1); ++buf;
+    }
+    *buf = XTOCHAR(d0); ++buf;
+    *buf = '\0';
+    return buf;
+}
+
+static char *zo32toa(char *buf, uint32_t n, unsigned width, fmt_flags_t flags)
+{
+    uint8_t d10, d9, d8, d7, d6, d5, d4, d3, d2, d1, d0;
+    unsigned first_digit = 0;
+
+    d0 = n & 0x7;
+    d1 = (n >> 3) & 0x7; if (d1) { first_digit = 1; }
+    d2 = (n >> 6) & 0x7; if (d2) { first_digit = 2; }
+    d3 = (n >> 9) & 0x7; if (d3) { first_digit = 3; }
+    d4 = (n >> 12) & 0x7; if (d4) { first_digit = 4; }
+    d5 = (n >> 15) & 0x7; if (d5) { first_digit = 5; }
+    d6 = (n >> 18) & 0x7; if (d6) { first_digit = 6; }
+    d7 = (n >> 21) & 0x7; if (d7) { first_digit = 7; }
+    d8 = (n >> 24) & 0x7; if (d8) { first_digit = 8; }
+    d9 = (n >> 27) & 0x7; if (d9) { first_digit = 9; }
+    d10 = (n >> 30) & 0x7; if (d10) { first_digit = 10; }
+
+    if (width) {
+        // width is 1-based; change to 0-based
+        if (width > 10) {
+            width = 10;
+        } else {
+            --width;
+        }
+        if (flags.zeropad) {
+            for (unsigned i = width; i > first_digit; --i) {
+                *buf = '0';
+                ++buf;
+            }
+        } else {
+            for (unsigned i = width; i > first_digit; --i) {
+                *buf = ' ';
+                ++buf;
+            }
+        }
+    }
+
+    switch (first_digit) {
+        case 10: *buf = XTOCHAR(d10); ++buf;
+        case 9: *buf = XTOCHAR(d9); ++buf;
+        case 8: *buf = XTOCHAR(d8); ++buf;
+        case 7: *buf = XTOCHAR(d7); ++buf;
+        case 6: *buf = XTOCHAR(d6); ++buf;
+        case 5: *buf = XTOCHAR(d5); ++buf;
+        case 4: *buf = XTOCHAR(d4); ++buf;
+        case 3: *buf = XTOCHAR(d3); ++buf;
+        case 2: *buf = XTOCHAR(d2); ++buf;
+        case 1: *buf = XTOCHAR(d1); ++buf;
+    }
+    *buf = XTOCHAR(d0); ++buf;
+    *buf = '\0';
+    return buf;
+}
+
+static char *zo64toa(char *buf, uint64_t n, unsigned width, fmt_flags_t flags)
+{
+    uint8_t d21, d20, d19, d18, d17, d16, d15, d14, d13, d12, d11, d10, d9, d8, d7, d6, d5, d4, d3, d2, d1, d0;
+    unsigned first_digit = 0;
+
+    d0 = n & 0x7;
+    d1 = (n >> 3) & 0x7; if (d1) { first_digit = 1; }
+    d2 = (n >> 6) & 0x7; if (d2) { first_digit = 2; }
+    d3 = (n >> 9) & 0x7; if (d3) { first_digit = 3; }
+    d4 = (n >> 12) & 0x7; if (d4) { first_digit = 4; }
+    d5 = (n >> 15) & 0x7; if (d5) { first_digit = 5; }
+    d6 = (n >> 18) & 0x7; if (d6) { first_digit = 6; }
+    d7 = (n >> 21) & 0x7; if (d7) { first_digit = 7; }
+    d8 = (n >> 24) & 0x7; if (d8) { first_digit = 8; }
+    d9 = (n >> 27) & 0x7; if (d9) { first_digit = 9; }
+    d10 = (n >> 30) & 0x7; if (d10) { first_digit = 10; }
+    d11 = (n >> 33) & 0x7; if (d11) { first_digit = 11; }
+    d12 = (n >> 36) & 0x7; if (d12) { first_digit = 12; }
+    d13 = (n >> 39) & 0x7; if (d13) { first_digit = 13; }
+    d14 = (n >> 42) & 0x7; if (d14) { first_digit = 14; }
+    d15 = (n >> 45) & 0x7; if (d15) { first_digit = 15; }
+    d16 = (n >> 48) & 0x7; if (d16) { first_digit = 16; }
+    d17 = (n >> 51) & 0x7; if (d17) { first_digit = 17; }
+    d18 = (n >> 54) & 0x7; if (d18) { first_digit = 18; }
+    d19 = (n >> 57) & 0x7; if (d19) { first_digit = 19; }
+    d20 = (n >> 60) & 0x7; if (d20) { first_digit = 20; }
+    d21 = (n >> 63) & 0x7; if (d21) { first_digit = 21; }
+
+    if (width) {
+        // width is 1-based; change to 0-based
+        if (width > 21) {
+            width = 21;
+        } else {
+            --width;
+        }
+        if (flags.zeropad) {
+            for (unsigned i = width; i > first_digit; --i) {
+                *buf = '0';
+                ++buf;
+            }
+        } else {
+            for (unsigned i = width; i > first_digit; --i) {
+                *buf = ' ';
+                ++buf;
+            }
+        }
+    }
+
+    switch (first_digit) {
+        case 21: *buf = XTOCHAR(d21); ++buf;
+        case 20: *buf = XTOCHAR(d20); ++buf;
+        case 19: *buf = XTOCHAR(d19); ++buf;
+        case 18: *buf = XTOCHAR(d18); ++buf;
+        case 17: *buf = XTOCHAR(d17); ++buf;
+        case 16: *buf = XTOCHAR(d16); ++buf;
         case 15: *buf = XTOCHAR(d15); ++buf;
         case 14: *buf = XTOCHAR(d14); ++buf;
         case 13: *buf = XTOCHAR(d13); ++buf;
@@ -807,36 +1024,6 @@ static char *zu64toa(char *buf, uint64_t n, unsigned width, fmt_flags_t flags)
     return buf;
 }
 
-#if UINT_MAX == UINT16_MAX
-#define zxtoa zx16toa
-#define zitoa zi16toa
-#define zutoa zu16toa
-#elif UINT_MAX == UINT32_MAX
-#define zxtoa zx32toa
-#define zitoa zi32toa
-#define zutoa zu32toa
-#elif UINT_MAX == UINT64_MAX
-#define zxtoa zx64toa
-#define zitoa zi64toa
-#define zutoa zu64toa
-#else
-#error UINT_MAX unsupported
-#endif
-#if ULONG_MAX == UINT32_MAX
-#define zlxtoa zx32toa
-#define zltoa zi32toa
-#define zultoa zu32toa
-#elif ULONG_MAX == UINT64_MAX
-#define zlxtoa zx64toa
-#define zltoa zi64toa
-#define zultoa zu64toa
-#else
-#error ULONG_MAX unsupported
-#endif
-#define zllxtoa zx64toa
-#define zlltoa zi64toa
-#define zulltoa zu64toa
-
 // NOTE: saturates to INT32_MIN/INT32_MAX; fraction limited to 4 digits
 static char *zftoaf(char *buf, float f, unsigned width, unsigned precision, fmt_flags_t flags)
 {
@@ -1195,7 +1382,7 @@ size_t zvsnprintf(char *buf, size_t n, const char *fmt, va_list ap)
                         zutoa(tmp, val, width, flags);
                     } else if (*spec == 'x' || *spec == 'X' || *spec == 'o') {
                         // we print octal as hex
-                        zxtoa(tmp, val, width, flags);
+                        zotoa(tmp, val, width, flags);
                     }
                 } else if (length == length_long) {
                     long unsigned val = va_arg(ap, long int);
@@ -1205,7 +1392,7 @@ size_t zvsnprintf(char *buf, size_t n, const char *fmt, va_list ap)
                         zultoa(tmp, val, width, flags);
                     } else if (*spec == 'x' || *spec == 'X' || *spec == 'o') {
                         // we print octal as hex
-                        zlxtoa(tmp, val, width, flags);
+                        zlotoa(tmp, val, width, flags);
                     }
                 } else if (length == length_long_long) {
                     long long unsigned val = va_arg(ap, long long int);
@@ -1215,7 +1402,7 @@ size_t zvsnprintf(char *buf, size_t n, const char *fmt, va_list ap)
                         zulltoa(tmp, val, width, flags);
                     } else if (*spec == 'x' || *spec == 'X' || *spec == 'o') {
                         // we print octal as hex
-                        zllxtoa(tmp, val, width, flags);
+                        zllotoa(tmp, val, width, flags);
                     }
                 }
                 tok = tmp;
@@ -1319,5 +1506,3 @@ size_t zsnprintf(char *buf, size_t n, const char *fmt, ...)
     va_end(ap);
     return len;
 }
-
-#endif /* USE_ZCOAP_SNPRINTF */
