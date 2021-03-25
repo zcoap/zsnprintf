@@ -47,17 +47,20 @@
 #define MAX_DEC_FMT_I16 "-32767"
 
 #if UINT_MAX == UINT16_MAX
-#define zxtoa(_buf, _n, _width, _flags) (zx64toa(_buf, ZS16, _n, _width, _flags))
+#define zxtoa(_buf, _n, _width, _flags) (zx64toa(_buf, ZS16, _n, _width, _flags, false))
+#define zXtoa(_buf, _n, _width, _flags) (zx64toa(_buf, ZS16, _n, _width, _flags, true))
 #define zotoa(_buf, _n, _width, _flags) (zo64toa(_buf, ZS16, _n, _width, _flags))
 #define zitoa zi16toa
 #define zutoa zu16toa
 #elif UINT_MAX == UINT32_MAX
-#define zxtoa(_buf, _n, _width, _flags) (zx64toa(_buf, ZS32, _n, _width, _flags))
+#define zxtoa(_buf, _n, _width, _flags) (zx64toa(_buf, ZS32, _n, _width, _flags, false))
+#define zXtoa(_buf, _n, _width, _flags) (zx64toa(_buf, ZS32, _n, _width, _flags, true))
 #define zotoa(_buf, _n, _width, _flags) (zo64toa(_buf, ZS32, _n, _width, _flags))
 #define zitoa zi32toa
 #define zutoa zu32toa
 #elif UINT_MAX == UINT64_MAX
-#define zxtoa(_buf, _n, _width, _flags) (zx64toa(_buf, ZS64, _n, _width, _flags))
+#define zxtoa(_buf, _n, _width, _flags) (zx64toa(_buf, ZS64, _n, _width, _flags, false))
+#define zXtoa(_buf, _n, _width, _flags) (zx64toa(_buf, ZS64, _n, _width, _flags, true))
 #define zotoa(_buf, _n, _width, _flags) (zo64toa(_buf, ZS64, _n, _width, _flags))
 #define zitoa zi64toa
 #define zutoa zu64toa
@@ -66,12 +69,14 @@
 #endif
 
 #if ULONG_MAX == UINT32_MAX
-#define zlxtoa(_buf, _n, _width, _flags) (zx64toa(_buf, ZS32, _n, _width, _flags))
+#define zlxtoa(_buf, _n, _width, _flags) (zx64toa(_buf, ZS32, _n, _width, _flags, false))
+#define zlXtoa(_buf, _n, _width, _flags) (zx64toa(_buf, ZS32, _n, _width, _flags, true))
 #define zlotoa(_buf, _n, _width, _flags) (zo64toa(_buf, ZS32, _n, _width, _flags))
 #define zltoa zi32toa
 #define zultoa zu32toa
 #elif ULONG_MAX == UINT64_MAX
-#define zlxtoa(_buf, _n, _width, _flags) (zx64toa(_buf, ZS64, _n, _width, _flags))
+#define zlxtoa(_buf, _n, _width, _flags) (zx64toa(_buf, ZS64, _n, _width, _flags, false))
+#define zlXtoa(_buf, _n, _width, _flags) (zx64toa(_buf, ZS64, _n, _width, _flags, true))
 #define zlotoa(_buf, _n, _width, _flags) (zo64toa(_buf, ZS64, _n, _width, _flags))
 #define zltoa zi64toa
 #define zultoa zu64toa
@@ -79,7 +84,8 @@
 #error ULONG_MAX unsupported
 #endif
 
-#define zllxtoa(_buf, _n, _width, _flags) (zx64toa(_buf, ZS64, _n, _width, _flags))
+#define zllxtoa(_buf, _n, _width, _flags) (zx64toa(_buf, ZS64, _n, _width, _flags, false))
+#define zllXtoa(_buf, _n, _width, _flags) (zx64toa(_buf, ZS64, _n, _width, _flags, true))
 #define zllotoa(_buf, _n, _width, _flags) (zo64toa(_buf, ZS64, _n, _width, _flags))
 #define zlltoa zi64toa
 #define zulltoa zu64toa
@@ -117,20 +123,19 @@ typedef enum exp_form_e {
     exp_E,
 } exp_form_t;
 
-typedef enum int_size_e {
-    ZS64,
-    ZS32,
-    ZS16,
-} int_size_t;
-
 typedef struct flags_s {
     unsigned leftAlign : 1;
     unsigned sign : 2;
     unsigned altForm : 1;
     unsigned zeropad : 1;
     unsigned exp : 2;
-    unsigned upper : 1;
 } fmt_flags_t;
+
+typedef enum int_size_e {
+    ZS64,
+    ZS32,
+    ZS16,
+} int_size_t;
 
 static char xTOCHAR(uint8_t x)
 {
@@ -142,11 +147,11 @@ static char XTOCHAR(uint8_t x)
     return x >= 0xA ? x - 0xA + 'A' : DTOCHAR(x);
 }
 
-static char *zx64toa(char *buf, int_size_t size, uint64_t n, unsigned width, fmt_flags_t flags)
+static char *zx64toa(char *buf, int_size_t size, uint64_t n, unsigned width, fmt_flags_t flags, bool, upper)
 {
     uint8_t d15=0, d14=0, d13=0, d12=0, d11=0, d10=0, d9=0, d8=0, d7=0, d6=0, d5=0, d4=0, d3=0, d2=0, d1=0, d0=0;
     unsigned first_digit = 0;
-    char (*tochar)(uint8_t) = flags.upper ? &XTOCHAR : &xTOCHAR;
+    char (*tochar)(uint8_t) = upper ? &XTOCHAR : &xTOCHAR;
 
     d0 = n & 0xF;
     d1 = (n >> 4) & 0xF; if (d1) { first_digit = 1; }
@@ -1130,11 +1135,9 @@ static inline int getPrecision(char *subspec, char **endptr)
 }
 
 typedef enum length_e {
-    length_char,
     length_int,
     length_long,
     length_long_long,
-    length_size_t,
 } length_t;
 
 static inline length_t getLength(const char * subspec) {
@@ -1145,11 +1148,43 @@ static inline length_t getLength(const char * subspec) {
         return length_long;
     }
     if (strchr(subspec, 'L')) {
+        return length_long;
+    }
+    if (strstr(subspec, "j")) {
         return length_long_long;
     }
     if (strstr(subspec, "hh")) {
-        return length_char;
+        return length_int;
     }
+    if (strstr(subspec, "h")) {
+        return length_int;
+    }
+    #ifdef SIZE_MAX
+    if (strstr(subspec, "z")) {
+        #if SIZE_MAX <= UINT_MAX
+        return length_int;
+	#elif SIZE_MAX == ULONG_MAX
+        return length_long;
+	#elif SIZE_MAX = ULLONG_MAX
+        return length_long_long;
+	#else
+	#error unsupported SIZE_MAX
+	#endif
+    }
+    #endif /* SIZE_MAX */
+    #ifdef PTRDIFF_MAX
+    if (strstr(subspec, "t")) {
+        #if PTRDIFF_MAX <= INT_MAX
+        return length_int;
+	#elif PTRDIFF_MAX == LONG_MAX
+        return length_long;
+	#elif PTRDIFF_MAX = LLONG_MAX
+        return length_long_long;
+	#else
+	#error unsupported PTRDIFF_MAX
+	#endif
+    }
+    #endif /* PTRDIFF_MAX */
     return length_int;
 }
 
@@ -1196,17 +1231,8 @@ size_t zvsnprintf(char *buf, size_t n, const char *fmt, va_list ap)
                        || *spec == 'u'
                        || *spec == 'x' || *spec == 'X'
                        || *spec == 'o') {
-                if (   length == length_char
-                    || length == length_int
-                    || length == length_size_t) {
-                    unsigned val = 0;
-                    if (length == length_char) {
-                        val = va_arg(ap, int);
-                    } else if (length == length_int) {
-                        val = va_arg(ap, int);
-                    } else if (length == length_size_t) {
-                        val = va_arg(ap, size_t);
-                    }
+                if (length == length_int) {
+                    unsigned val = va_arg(ap, int);
                     if (*spec == 'd' || *spec == 'i') {
                         zitoa(tmp, val, width, flags);
                     } else if (*spec == 'u') {
@@ -1214,8 +1240,7 @@ size_t zvsnprintf(char *buf, size_t n, const char *fmt, va_list ap)
                     } else if (*spec == 'x') {
                         zxtoa(tmp, val, width, flags);
                     } else if (*spec == 'X') {
-		        flags.upper = 1;
-                        zxtoa(tmp, val, width, flags);
+                        zXtoa(tmp, val, width, flags);
 		    } else if (*spec == 'o') {
                         zotoa(tmp, val, width, flags);
 		    }
@@ -1228,8 +1253,7 @@ size_t zvsnprintf(char *buf, size_t n, const char *fmt, va_list ap)
                     } else if (*spec == 'x') {
                         zlxtoa(tmp, val, width, flags);
                     } else if (*spec == 'X') {
-		        flags.upper = 1;
-                        zlxtoa(tmp, val, width, flags);
+                        zlXtoa(tmp, val, width, flags);
 		    } else if (*spec == 'o') {
                         zlotoa(tmp, val, width, flags);
 		    }
@@ -1242,8 +1266,7 @@ size_t zvsnprintf(char *buf, size_t n, const char *fmt, va_list ap)
                     } else if (*spec == 'x') {
                         zllxtoa(tmp, val, width, flags);
                     } else if (*spec == 'X') {
-		        flags.upper = 1;
-                        zllxtoa(tmp, val, width, flags);
+                        zllXtoa(tmp, val, width, flags);
 		    } else if (*spec == 'o') {
                         zllotoa(tmp, val, width, flags);
 		    }
@@ -1253,7 +1276,7 @@ size_t zvsnprintf(char *buf, size_t n, const char *fmt, va_list ap)
                        || *spec == 'e' || *spec == 'E'
                        || *spec == 'g' || *spec == 'G'
                        || *spec == 'a' || *spec == 'A') {
-                if (length == length_long_long) {
+                if (length == length_long) {
                     long double val = va_arg(ap, long double);
                     if (*spec == 'e' || *spec == 'a') {
                         flags.exp = exp_e;
@@ -1291,7 +1314,7 @@ size_t zvsnprintf(char *buf, size_t n, const char *fmt, va_list ap)
                 tok = tmp;
             } else if (*spec == 'p') {
                 void *val = va_arg(ap, void *);
-                zxtoa(tmp, (unsigned long) /* TODO: whoa, this aint portable... hmmm  */val, width, flags); // presuming here that native arithmetic width is wide enough for a data pointer
+                zllxtoa(tmp, (unsigned long long)val, width, flags);
                 tok = tmp;
             } else if (*spec == 's') {
                 tok = va_arg(ap, const char *);
