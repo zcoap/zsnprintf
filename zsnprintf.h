@@ -2,7 +2,7 @@
  * File:   zsnprintf.h
  * Author: Michael Sandstedt
  *
- * An snprintf that fast, capable, and safe.
+ * An snprintf that is fast, capable, and safe.
  *
  * Created on January 1, 2017, 11:38 AM
  */

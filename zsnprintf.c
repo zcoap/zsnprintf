@@ -4,28 +4,31 @@
  *
  * Created on January 1, 2017, 11:38 AM
  *
- * An snprintf that actually works and won't kill performance.
+ * A feature-rich, reentrant, self-contained, high-performance snprintf.
+ * Performance of up * 80x faster has been observed as compared to library
+ * implementations on some microcontrollers in floating point output scenarios.
  *
- * This has been tested to perform up to 80x faster than library implementations
- * on some microcontrollers in floating point output scenarios  It's also
- * reentrant.
+ * Supported features:
  *
- * There are some limitations:
+ * * %u, i, d, x, X, o, f, e, E, g, G, a, A, s, p format specifiers
+ * * ll, l, h, hh, L, j, z, t length specifiers
+ * * zero-padding and '+' format modifiers
  *
- *    * the %o (octal) format specifier produces %x output
- *    * the C99 %a/%A format specifiers are interpreted as %e/%E
+ * In addition, 32-bit doubles, which are rare but do exist, are properly
+ * supported.  Microchip's XC16 compiler uses these by default.
+ *
+ * Limitations:
+ *
+ *    * C99 %a/%A format specifiers are interpreted as %e/%E
  *    * %f produces %e output for abs(float) > INT32_MAX
- *    * the '-' flag (left justify) isn't supported
- *    * the '#' alternate form flag isn't supported
+ *    * the '-' flag (left justify) is ignored
+ *    * the '#' alternate form flag is ignored
  *    * %g/%G aren't guaranteed to produce the most compact output,
  *      and may be printed with trailing zeros
  *    * printed precision for 64 bit doubles can be less the full 53 bits of the
  *      mantissa; some usages will produce output precision limited to 32 bits
- *
- * But in most ways, this implementation is *more* feature-rich than
- * library offerings.  For instance, 32-bit doubles (a rare, but conformant
- * configuration used for instance in Microchip's XC16) are properly supported.
- * Likewise, %Lf long doubles are supported.
+ *    * long doubles (%LF) are read correctly, but cast to double
+ *    * floating point output is not 100% conformant to IEEE-754
  */
 
 #include <float.h>
