@@ -36,6 +36,7 @@
 #include <math.h>
 #include <tgmath.h>
 #include <stdarg.h>
+#include <stdbool.h>
 #include <stdint.h>
 #include <string.h>
 #include "config.h"
@@ -150,7 +151,7 @@ static char XTOCHAR(uint8_t x)
     return x >= 0xA ? x - 0xA + 'A' : DTOCHAR(x);
 }
 
-static char *zx64toa(char *buf, int_size_t size, uint64_t n, unsigned width, fmt_flags_t flags, bool, upper)
+static char *zx64toa(char *buf, int_size_t size, uint64_t n, unsigned width, fmt_flags_t flags, bool upper)
 {
     uint8_t d15=0, d14=0, d13=0, d12=0, d11=0, d10=0, d9=0, d8=0, d7=0, d6=0, d5=0, d4=0, d3=0, d2=0, d1=0, d0=0;
     unsigned first_digit = 0;
@@ -991,7 +992,7 @@ static char *zftoal(char *buf, long double f, unsigned width, unsigned precision
     int exponent = 0;
     if (flags.exp) {
         if (fabsl(f) > 0.0) {
-            exponent = log10l(fabsf(f));
+            exponent = log10l(fabsl(f));
             f *= powl(10, -exponent);
             if (!(int32_t)f) {
                 f *= 10.0;
